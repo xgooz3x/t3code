@@ -716,12 +716,50 @@ export declare namespace T3IssueReactions {
   export type Result = typeof T3IssueReactions.result.Type
 }
 
+/** An issue is the core work item in Linear. Issues belong to a team, have a workflow status, can be assigned to users, carry a priority level, and can be organized into projects and cycles. Issues support sub-issues (parent-child hierarchy up to 10 levels deep), labels, due dates, estimates, and SLA tracking. They can also be linked to other issues via relations, attached to releases, and tracked through their full history of changes. */
+export const CommentIssueIssue = Schema.Struct({
+  /** The unique identifier of the entity. */
+  id: Shared.ID
+})
+export interface CommentIssueIssue extends Schema.Struct.Type<typeof CommentIssueIssue.fields> {}
+
 /** A comment associated with an issue, project update, initiative update, document content, post, project, or initiative. Comments support rich text (ProseMirror), emoji reactions, and threaded replies via parentId. Comments can be created by workspace users or by external users through integrations (e.g., Slack, Intercom). Each comment belongs to exactly one parent entity. */
-export const Comment = Schema.Struct({
+export const T3CommentIssueCommentComment = Schema.Struct({
+  /** The issue that the comment is associated with. Null if the comment belongs to a different parent entity type. */
+  issue: Schema.NullOr(CommentIssueIssue)
+})
+export interface T3CommentIssueCommentComment extends Schema.Struct.Type<typeof T3CommentIssueCommentComment.fields> {}
+
+/** `query T3CommentIssue` */
+export const T3CommentIssue = GraphQL.query("T3CommentIssue", {
+  document: {
+    variables: [
+      { name: "id", body: "String!" }
+    ],
+    selections: [
+      { name: "comment", body: ["(id:$", "id", "){issue{id}}"] }
+    ],
+    fragments: []
+  },
+  variables: {
+    id: Schema.String
+  },
+  result: Schema.Struct({
+    /** A specific comment. */
+    comment: T3CommentIssueCommentComment
+  })
+})
+export declare namespace T3CommentIssue {
+  export type Variables = typeof T3CommentIssue.variables.Type
+  export type Result = typeof T3CommentIssue.result.Type
+}
+
+/** A comment associated with an issue, project update, initiative update, document content, post, project, or initiative. Comments support rich text (ProseMirror), emoji reactions, and threaded replies via parentId. Comments can be created by workspace users or by external users through integrations (e.g., Slack, Intercom). Each comment belongs to exactly one parent entity. */
+export const T3CommentReactionsCommentComment = Schema.Struct({
   /** Reactions associated with the comment. */
   reactions: Schema.Array(LinearReaction)
 })
-export interface Comment extends Schema.Struct.Type<typeof Comment.fields> {}
+export interface T3CommentReactionsCommentComment extends Schema.Struct.Type<typeof T3CommentReactionsCommentComment.fields> {}
 
 /** `query T3CommentReactions` */
 export const T3CommentReactions = GraphQL.query("T3CommentReactions", {
@@ -742,7 +780,7 @@ export const T3CommentReactions = GraphQL.query("T3CommentReactions", {
   },
   result: Schema.Struct({
     /** A specific comment. */
-    comment: Comment
+    comment: T3CommentReactionsCommentComment
   })
 })
 export declare namespace T3CommentReactions {
@@ -751,4 +789,4 @@ export declare namespace T3CommentReactions {
 }
 
 /** Every operation in LinearApi.graphql. */
-export const LinearApiGraphQLGroup = GraphQLGroup.make(T3ViewerId, T3Viewer, T3Issues, T3Issue, T3Comments, T3Team, T3IssueCreate, T3IssueUpdate, T3CommentCreate, T3ReactionCreate, T3ReactionDelete, T3IssueReactions, T3CommentReactions)
+export const LinearApiGraphQLGroup = GraphQLGroup.make(T3ViewerId, T3Viewer, T3Issues, T3Issue, T3Comments, T3Team, T3IssueCreate, T3IssueUpdate, T3CommentCreate, T3ReactionCreate, T3ReactionDelete, T3IssueReactions, T3CommentIssue, T3CommentReactions)

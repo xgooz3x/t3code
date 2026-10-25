@@ -374,4 +374,33 @@ describe("LinearIssueTracker", () => {
       link: { name: "Intake", about: "", url: "https://linear.app/team/ENG/new?template=tpl_2" },
     });
   });
+
+  it.effect("refuses a comment reaction when the comment is not on the named issue", () =>
+    Effect.gen(function* () {
+      const created: unknown[] = [];
+      const { tracker } = fakeLinear({
+        T3Issue: (variables) => ({ issue: bareDetail(String(variables.id)) }),
+        T3CommentIssue: (variables) => ({
+          comment: { issue: { id: variables.id === "cmt_own" ? "iss_ENG-1" : "iss_ENG-2" } },
+        }),
+        T3ReactionCreate: (variables) => {
+          created.push(variables.input);
+          return { reactionCreate: { success: true } };
+        },
+      });
+      const api = yield* tracker;
+      const react = (subjectId: string) =>
+        api.setReaction!({
+          ...target,
+          key: "ENG-1",
+          subjectId,
+          content: "thumbs-up",
+          reacted: true,
+        });
+      const foreign = yield* Effect.flip(react("cmt_other"));
+      expect(foreign.reason).toBe("not-found");
+      yield* react("cmt_own");
+      expect(created).toEqual([{ commentId: "cmt_own", emoji: "👍" }]);
+    }),
+  );
 });

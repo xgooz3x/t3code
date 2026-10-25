@@ -519,6 +519,13 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, LinearApi.Lin
 
       setReaction: Effect.fn("LinearIssueTracker.setReaction")(function* (input) {
         const issue = yield* requireTeamIssue("setReaction", input);
+        // A comment id names no issue, so one from elsewhere would pass the team check above.
+        if (
+          input.subjectId !== undefined &&
+          (yield* linear.commentIssueId(input.subjectId)) !== issue.id
+        ) {
+          return yield* notFound("setReaction");
+        }
         const emoji = EMOJI_BY_CONTENT[input.content];
         const target =
           input.subjectId === undefined ? { issueId: issue.id } : { commentId: input.subjectId };

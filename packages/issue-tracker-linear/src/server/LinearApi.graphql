@@ -273,6 +273,14 @@ query T3IssueReactions($id: String!) {
   }
 }
 
+query T3CommentIssue($id: String!) {
+  comment(id: $id) {
+    issue {
+      id
+    }
+  }
+}
+
 query T3CommentReactions($id: String!) {
   comment(id: $id) {
     reactions {

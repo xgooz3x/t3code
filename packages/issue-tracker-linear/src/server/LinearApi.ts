@@ -150,6 +150,8 @@ export class LinearApi extends Context.Service<
       readonly emoji: string;
     }) => Effect.Effect<void, IssueTrackerError>;
     readonly deleteReaction: (id: string) => Effect.Effect<void, IssueTrackerError>;
+    /** The issue a comment is on; null for a comment on something else, such as a project. */
+    readonly commentIssueId: (commentId: string) => Effect.Effect<string | null, IssueTrackerError>;
     /** Reactions on an issue (by identifier) or a comment (by id), to find the viewer's own. */
     readonly listReactions: (input: {
       readonly issueId?: string | undefined;
@@ -392,6 +394,11 @@ export const make = Effect.gen(function* () {
       Effect.flatMap(({ reactionDelete }) => applied("deleteReaction", reactionDelete)),
     );
 
+  const commentIssueId: LinearApi["Service"]["commentIssueId"] = (commentId) =>
+    call("commentIssueId", (linear) => linear.T3CommentIssue({ id: commentId })).pipe(
+      Effect.map((data) => data.comment.issue?.id ?? null),
+    );
+
   const listReactions: LinearApi["Service"]["listReactions"] = (input) =>
     input.commentId === undefined
       ? call("listReactions", (linear) =>
@@ -404,6 +411,7 @@ export const make = Effect.gen(function* () {
   return LinearApi.of({
     viewer,
     viewerId,
+    commentIssueId,
     listIssues,
     getIssue,
     getComments,
