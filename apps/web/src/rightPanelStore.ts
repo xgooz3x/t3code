@@ -805,19 +805,18 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
       openIssue: (ref, target) =>
         set((state) =>
           userAction(state, scopedThreadKey(ref), (current) => {
-            // A link (the page URL) names an issue without its host; reuse the tab a row opened.
-            const existing =
-              target.host === undefined
-                ? current.surfaces.find(
-                    (entry) =>
-                      entry.kind === "issue" &&
-                      entry.environmentId === target.environmentId &&
-                      entry.projectId === target.projectId &&
-                      entry.tracker === target.tracker &&
-                      entry.scope.toLowerCase() === target.scope.toLowerCase() &&
-                      entry.key === target.key,
-                  )
-                : undefined;
+            // A link (the page URL) names an issue without its host and a row names it with one;
+            // either way round, the tab already open for that issue is reused.
+            const existing = current.surfaces.find(
+              (entry) =>
+                entry.kind === "issue" &&
+                (target.host === undefined || entry.host === undefined) &&
+                entry.environmentId === target.environmentId &&
+                entry.projectId === target.projectId &&
+                entry.tracker === target.tracker &&
+                entry.scope.toLowerCase() === target.scope.toLowerCase() &&
+                entry.key === target.key,
+            );
             if (existing) return { ...current, isOpen: true, activeSurfaceId: existing.id };
             const surface = issueSurface(target);
             const next = upsertSurface(current, surface);

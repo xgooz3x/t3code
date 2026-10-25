@@ -99,6 +99,7 @@ const make = Effect.gen(function* () {
       Effect.map((uuid) => CommandId.make(`server:thread-issue-${tag}:${threadId}:${uuid}`)),
     );
 
+  // Best effort for background refreshes: a thread that cannot be read is skipped, not failed.
   const shellOf = (threadId: ThreadId): Effect.Effect<OrchestrationV2ThreadShell | null> =>
     orchestrator.getThreadShell(threadId).pipe(Effect.orElseSucceed(() => null));
 
@@ -159,7 +160,7 @@ const make = Effect.gen(function* () {
 
   const link: ThreadIssueService["Service"]["link"] = Effect.fn("ThreadIssueService.link")(
     function* (input) {
-      const thread = yield* shellOf(input.threadId);
+      const thread = yield* orchestrator.getThreadShell(input.threadId);
       if (thread?.issues?.some((existing) => threadIssueKeysEqual(existing, input.ref))) {
         return { alreadyLinked: true };
       }
@@ -182,7 +183,7 @@ const make = Effect.gen(function* () {
 
   const unlink: ThreadIssueService["Service"]["unlink"] = Effect.fn("ThreadIssueService.unlink")(
     function* (input) {
-      const thread = yield* shellOf(input.threadId);
+      const thread = yield* orchestrator.getThreadShell(input.threadId);
       if (!thread?.issues?.some((existing) => threadIssueKeysEqual(existing, input.key))) {
         return { wasLinked: false };
       }

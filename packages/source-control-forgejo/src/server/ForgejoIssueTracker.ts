@@ -488,8 +488,14 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
         ),
 
       update: (input) =>
-        issueTarget("update", input).pipe(
-          Effect.flatMap(({ path }) =>
+        // Labels resolve before any write, so an unknown name leaves the issue untouched.
+        Effect.all([
+          issueTarget("update", input),
+          input.labels === undefined
+            ? Effect.succeed(undefined)
+            : labelIds(input, "update", input.labels),
+        ]).pipe(
+          Effect.flatMap(([{ path }, labels]) =>
             Effect.all([
               input.title === undefined && input.body === undefined && input.assignees === undefined
                 ? Effect.void
@@ -502,17 +508,13 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
                       ...(input.assignees === undefined ? {} : { assignees: input.assignees }),
                     },
                   }),
-              input.labels === undefined
+              labels === undefined
                 ? Effect.void
-                : labelIds(input, "update", input.labels).pipe(
-                    Effect.flatMap((labels) =>
-                      write(input, "update", {
-                        path: `${path}/labels`,
-                        method: "PUT",
-                        body: { labels },
-                      }),
-                    ),
-                  ),
+                : write(input, "update", {
+                    path: `${path}/labels`,
+                    method: "PUT",
+                    body: { labels },
+                  }),
             ]),
           ),
           Effect.asVoid,

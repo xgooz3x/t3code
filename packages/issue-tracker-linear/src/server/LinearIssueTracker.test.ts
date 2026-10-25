@@ -115,7 +115,7 @@ describe("LinearIssueTracker", () => {
   it.effect("lists a team's issues as summaries keyed by identifier", () =>
     Effect.gen(function* () {
       const { tracker, requests } = fakeLinear({
-        T3Viewer: () => ({ viewer: JULIUS, teams: { nodes: [] } }),
+        T3ViewerId: () => ({ viewer: { id: JULIUS.id } }),
         T3Issues: (variables) => {
           expect(variables.filter).toMatchObject({
             team: { key: { eq: "ENG" } },
@@ -166,7 +166,7 @@ describe("LinearIssueTracker", () => {
   it.effect("reads an issue with its comments, reactions, history and linked pull requests", () =>
     Effect.gen(function* () {
       const { tracker } = fakeLinear({
-        T3Viewer: () => ({ viewer: JULIUS, teams: { nodes: [] } }),
+        T3ViewerId: () => ({ viewer: { id: JULIUS.id } }),
         T3Issue: () => ({
           issue: issue("ENG-7", {
             comments: {

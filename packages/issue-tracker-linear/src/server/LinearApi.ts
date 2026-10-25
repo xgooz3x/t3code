@@ -101,6 +101,7 @@ export interface LinearTeamScope {
 export class LinearApi extends Context.Service<
   LinearApi,
   {
+    readonly viewerId: () => Effect.Effect<string, IssueTrackerError>;
     /** Who a credential is, and the teams it reaches. Takes the token so it can vet a new one. */
     readonly viewer: (token?: string) => Effect.Effect<
       {
@@ -292,6 +293,9 @@ export const make = Effect.gen(function* () {
       Effect.map((data) => ({ viewer: data.viewer, teams: data.teams.nodes })),
     );
 
+  const viewerId: LinearApi["Service"]["viewerId"] = () =>
+    call("viewer", (linear) => linear.T3ViewerId()).pipe(Effect.map((data) => data.viewer.id));
+
   const listIssues: LinearApi["Service"]["listIssues"] = (input) =>
     call("listIssues", (linear) =>
       linear.T3Issues({ first: input.first, after: input.after ?? null, filter: input.filter }),
@@ -399,6 +403,7 @@ export const make = Effect.gen(function* () {
 
   return LinearApi.of({
     viewer,
+    viewerId,
     listIssues,
     getIssue,
     getComments,

@@ -235,15 +235,18 @@ describe("ForgejoIssueTracker", () => {
               ? { stdout: encode([{ id: 9, name: "ui", color: "000000" }]) }
               : { stdout: encode([]) };
         }
-        if (input.method === "PUT") puts.push(input.body);
+        if (input.method === "PUT" || input.method === "PATCH") puts.push(input.body);
         return { stdout: "" };
       });
       const target = { cwd: "/w", host: "forgejo.test", scope: "acme/web", key: "42" };
-      yield* api.update({ ...target, labels: ["bug", "ui"] });
+      yield* api.update!({ ...target, labels: ["bug", "ui"] });
       expect(puts).toEqual([{ labels: [3, 9] }]);
 
-      const error = yield* api.update({ ...target, labels: ["missing"] }).pipe(Effect.flip);
+      const error = yield* api.update!({ ...target, title: "Renamed", labels: ["missing"] }).pipe(
+        Effect.flip,
+      );
       expect(error.detail).toContain("missing");
+      // Nothing is written when a label does not resolve, not even the title.
       expect(puts).toHaveLength(1);
     }),
   );

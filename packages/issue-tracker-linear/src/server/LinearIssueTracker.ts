@@ -372,10 +372,9 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, LinearApi.Lin
         : Effect.succeed(member.id);
     };
 
-    const viewerId: Effect.Effect<string | null> = linear.viewer().pipe(
-      Effect.map((data) => data.viewer.id),
-      Effect.orElseSucceed(() => null),
-    );
+    const viewerId: Effect.Effect<string | null> = linear
+      .viewerId()
+      .pipe(Effect.orElseSucceed(() => null));
 
     const api: StandaloneIssueTrackerApi = {
       kind: LinearApi.KIND,
@@ -391,7 +390,7 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, LinearApi.Lin
         ),
 
       // The id, not the display name: it is what the involvement filters compare against.
-      getViewer: () => linear.viewer().pipe(Effect.map((data) => data.viewer.id)),
+      getViewer: () => linear.viewerId(),
 
       listIssues: (input) => {
         // `ENG-12`, `#12` or `12` asks for one issue of this team by number.

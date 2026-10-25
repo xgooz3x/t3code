@@ -165,6 +165,32 @@ export const LinearPageInfo = Schema.Struct({
 })
 export interface LinearPageInfo extends Schema.Struct.Type<typeof LinearPageInfo.fields> {}
 
+/** A user that belongs to a workspace. Users can have different roles (admin, member, guest, or app) that determine their level of access. Users can be members of multiple teams, and can be active or deactivated. Guest users have limited access scoped to specific teams they are invited to. */
+export const User = Schema.Struct({
+  /** The unique identifier of the entity. */
+  id: Shared.ID
+})
+export interface User extends Schema.Struct.Type<typeof User.fields> {}
+
+/** `query T3ViewerId` */
+export const T3ViewerId = GraphQL.query("T3ViewerId", {
+  document: {
+    variables: [],
+    selections: [
+      { name: "viewer", body: ["{id}"] }
+    ],
+    fragments: []
+  },
+  result: Schema.Struct({
+    /** The currently authenticated user making the API request. */
+    viewer: User
+  })
+})
+export declare namespace T3ViewerId {
+  export type Variables = typeof T3ViewerId.variables.Type
+  export type Result = typeof T3ViewerId.result.Type
+}
+
 /** A team is the primary organizational unit in Linear. Issues belong to teams, and each team has its own workflow states, cycles, labels, and settings. Teams can be public (visible to all workspace members), private (visible only to team members), or restricted (visible only within an enclosing private-team boundary). Teams can also have sub-teams that inherit settings from their parent. */
 export const T3ViewerTeamsNodesTeam = Schema.Struct({
   /** The unique identifier of the entity. */
@@ -725,4 +751,4 @@ export declare namespace T3CommentReactions {
 }
 
 /** Every operation in LinearApi.graphql. */
-export const LinearApiGraphQLGroup = GraphQLGroup.make(T3Viewer, T3Issues, T3Issue, T3Comments, T3Team, T3IssueCreate, T3IssueUpdate, T3CommentCreate, T3ReactionCreate, T3ReactionDelete, T3IssueReactions, T3CommentReactions)
+export const LinearApiGraphQLGroup = GraphQLGroup.make(T3ViewerId, T3Viewer, T3Issues, T3Issue, T3Comments, T3Team, T3IssueCreate, T3IssueUpdate, T3CommentCreate, T3ReactionCreate, T3ReactionDelete, T3IssueReactions, T3CommentReactions)

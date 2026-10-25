@@ -80,6 +80,13 @@ fragment LinearPageInfo on PageInfo {
   endCursor
 }
 
+# Only the viewer's id: the issue reads need it per request, and the teams cost query budget.
+query T3ViewerId {
+  viewer {
+    id
+  }
+}
+
 query T3Viewer {
   viewer {
     ...LinearUser
