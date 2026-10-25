@@ -378,29 +378,45 @@ describe("LinearIssueTracker", () => {
   it.effect("refuses a comment reaction when the comment is not on the named issue", () =>
     Effect.gen(function* () {
       const created: unknown[] = [];
-      const { tracker } = fakeLinear({
+      const deleted: unknown[] = [];
+      const { tracker, requests } = fakeLinear({
         T3Issue: (variables) => ({ issue: bareDetail(String(variables.id)) }),
         T3CommentIssue: (variables) => ({
           comment: { issue: { id: variables.id === "cmt_own" ? "iss_ENG-1" : "iss_ENG-2" } },
         }),
+        T3ViewerId: () => ({ viewer: { id: JULIUS.id } }),
+        T3CommentReactions: () => ({
+          comment: { reactions: [{ id: "rct_1", emoji: "👍", user: JULIUS }] },
+        }),
+        T3ReactionDelete: (variables) => {
+          deleted.push(variables.id);
+          return { reactionDelete: { success: true } };
+        },
         T3ReactionCreate: (variables) => {
           created.push(variables.input);
           return { reactionCreate: { success: true } };
         },
       });
       const api = yield* tracker;
-      const react = (subjectId: string) =>
+      const react = (subjectId: string, reacted = true) =>
         api.setReaction!({
           ...target,
           key: "ENG-1",
           subjectId,
           content: "thumbs-up",
-          reacted: true,
+          reacted,
         });
       const foreign = yield* Effect.flip(react("cmt_other"));
       expect(foreign.reason).toBe("not-found");
       yield* react("cmt_own");
       expect(created).toEqual([{ commentId: "cmt_own", emoji: "👍" }]);
+
+      // Removal is checked the same way, before the comment's reactions are even read.
+      const foreignRemoval = yield* Effect.flip(react("cmt_other", false));
+      expect(foreignRemoval.reason).toBe("not-found");
+      expect(requests.some((request) => request.operation === "T3CommentReactions")).toBe(false);
+      yield* react("cmt_own", false);
+      expect(deleted).toEqual(["rct_1"]);
     }),
   );
 });
