@@ -67,6 +67,8 @@ const CAPABILITIES: IssueCapabilities = {
 
 /** Forgejo's own ceiling on a page, which a self-hosted server may lower. */
 const PAGE_SIZE = 50;
+// Bounds label resolution on a server that never says it has run out.
+const MAX_LABEL_PAGES = 20;
 /** Comment reactions are a request each, so only the first page's are read with the detail. */
 const COMMENT_REACTION_LIMIT = 50;
 
@@ -223,6 +225,35 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
       operation: string,
       input: Omit<ForgejoCli.ForgejoApiInput, "cwd" | "repository" | "host">,
     ) => request(target, operation, input).pipe(Effect.asVoid);
+
+    /**
+     * Labels are written by id, so names resolve against every page of the repository's labels.
+     * A name that resolves to nothing fails the write rather than silently dropping the label.
+     */
+    const labelIds = Effect.fn("ForgejoIssueTracker.labelIds")(function* (
+      target: Target,
+      operation: string,
+      names: ReadonlyArray<string>,
+    ) {
+      if (names.length === 0) return [];
+      const idByName = new Map<string, number>();
+      for (let page = 1; page <= MAX_LABEL_PAGES; page++) {
+        const { rows, nextCursor } = yield* readPage(
+          target,
+          operation,
+          `${repoPath(target.scope)}/labels`,
+          page,
+          ForgejoLabel,
+        );
+        for (const label of rows) idByName.set(label.name, label.id);
+        if (nextCursor === null || names.every((name) => idByName.has(name))) break;
+      }
+      const missing = names.filter((name) => !idByName.has(name));
+      if (missing.length > 0) {
+        return yield* refused(operation, `Forgejo has no label named ${missing.join(", ")}.`);
+      }
+      return names.map((name) => idByName.get(name)!);
+    });
 
     const getViewer = (target: Target, operation: string) =>
       read(target, operation, { path: "user" }, ForgejoUser).pipe(Effect.map((user) => user.login));
@@ -420,13 +451,7 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
       },
 
       create: (input) =>
-        // Labels are written by id, so the names are resolved against the repository's own first.
-        readArray(
-          input,
-          "create",
-          `${repoPath(input.scope)}/labels?limit=${PAGE_SIZE}`,
-          ForgejoLabel,
-        ).pipe(
+        labelIds(input, "create", input.labels).pipe(
           Effect.flatMap((labels) =>
             read(
               input,
@@ -437,9 +462,7 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
                 body: {
                   title: input.title,
                   body: input.body,
-                  labels: labels.flatMap((label) =>
-                    input.labels.includes(label.name) ? [label.id] : [],
-                  ),
+                  labels,
                   assignees: input.assignees,
                 },
               },
@@ -481,21 +504,12 @@ export const make: Effect.Effect<IssueTrackerApi, never, ForgejoCli.ForgejoCli> 
                   }),
               input.labels === undefined
                 ? Effect.void
-                : readArray(
-                    input,
-                    "update",
-                    `${repoPath(input.scope)}/labels?limit=${PAGE_SIZE}`,
-                    ForgejoLabel,
-                  ).pipe(
+                : labelIds(input, "update", input.labels).pipe(
                     Effect.flatMap((labels) =>
                       write(input, "update", {
                         path: `${path}/labels`,
                         method: "PUT",
-                        body: {
-                          labels: labels.flatMap((label) =>
-                            input.labels!.includes(label.name) ? [label.id] : [],
-                          ),
-                        },
+                        body: { labels },
                       }),
                     ),
                   ),

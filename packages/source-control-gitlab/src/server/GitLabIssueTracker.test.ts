@@ -218,4 +218,29 @@ describe("GitLabIssueTracker", () => {
       expect(requests).toBe(0);
     }),
   );
+  it.effect("reads the newest comments first and shows each page oldest to newest", () =>
+    Effect.gen(function* () {
+      const paths: string[] = [];
+      const note = (id: number, day: string) => ({
+        id,
+        body: `note ${id}`,
+        author: { username: "julius" },
+        created_at: `2026-07-${day}T00:00:00Z`,
+      });
+      const api = yield* tracker((args) => {
+        paths.push(args[1]!);
+        // GitLab answers in the order it is asked for.
+        return encode(args[1]!.includes("sort=desc") ? [note(9, "03"), note(8, "02")] : []);
+      });
+      const page = yield* api.getComments({
+        cwd: "/w",
+        host: "gitlab.com",
+        scope: "acme/web",
+        key: "42",
+        cursor: "1",
+      });
+      expect(paths[0]).toContain("order_by=created_at&sort=desc");
+      expect(page.comments.map((comment) => comment.id)).toEqual(["8", "9"]);
+    }),
+  );
 });

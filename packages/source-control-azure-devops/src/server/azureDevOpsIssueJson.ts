@@ -86,7 +86,10 @@ const WorkItem = Schema.Struct({
 });
 
 const decodeWorkItemEntry = Schema.decodeUnknownExit(WorkItem);
-const decodeUnknownList = decodeJsonResult(Schema.NullOr(Schema.Array(Schema.Unknown)));
+// `az devops invoke` answers the REST envelope, `{ count, value }`, not a bare array.
+const decodeUnknownList = decodeJsonResult(
+  Schema.Struct({ value: Schema.optional(Schema.NullOr(Schema.Array(Schema.Unknown))) }),
+);
 const decodeWorkItem = decodeJsonResult(WorkItem);
 
 type DecodeFailure =
@@ -178,8 +181,8 @@ export function decodeWorkItemsJson(
   raw: string,
   closed: ClosedStates,
 ): Result.Result<ReadonlyArray<AzureDevOpsWorkItem>, DecodeFailure> {
-  return Result.map(decodeUnknownList(raw.trim().length === 0 ? "[]" : raw), (rows) =>
-    (rows ?? []).flatMap((entry) => {
+  return Result.map(decodeUnknownList(raw.trim().length === 0 ? "{}" : raw), ({ value }) =>
+    (value ?? []).flatMap((entry) => {
       const item = decodeWorkItemEntry(entry);
       if (Exit.isFailure(item)) return [];
       return toWorkItem(item.value, closed) ?? [];

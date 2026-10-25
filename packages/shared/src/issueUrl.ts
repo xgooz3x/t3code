@@ -46,9 +46,17 @@ export function parseIssueUrl(targetUrl: string): IssueLink | null {
   // Azure DevOps work items: /{org}/{project}/_workitems/edit/{n}. The scope is the repository
   // path the project binding writes, which a work item URL does not carry, so the organisation
   // and project stand in for it; the service matches by host and prefix.
-  if (isHostOf(host, "dev.azure.com") || host.endsWith(".visualstudio.com")) {
+  if (isHostOf(host, "dev.azure.com")) {
     const match = /^\/([^/]+\/[^/]+)\/_workitems\/edit\/(\d+)(?:\/|$)/u.exec(url.pathname);
     return claim("azure-devops", host, match);
+  }
+  // Legacy {org}.visualstudio.com/{project}/... names the organisation in the hostname.
+  if (host.endsWith(".visualstudio.com")) {
+    const organization = host.slice(0, -".visualstudio.com".length);
+    const match = /^\/(?:defaultcollection\/)?([^/]+)\/_workitems\/edit\/(\d+)(?:\/|$)/iu.exec(
+      url.pathname,
+    );
+    return match ? claimParts("azure-devops", host, `${organization}/${match[1]}`, match[2]) : null;
   }
   // GitHub, and any Enterprise install: /{owner}/{repo}/issues/{n}
   const twoSegments = /^\/([^/]+\/[^/]+)\/issues\/(\d+)(?:\/|$)/u.exec(url.pathname);
@@ -70,8 +78,15 @@ export function parseIssueUrl(targetUrl: string): IssueLink | null {
 }
 
 function claim(tracker: string, host: string, match: RegExpExecArray | null): IssueLink | null {
-  const scope = match?.[1];
-  const key = match?.[2];
+  return claimParts(tracker, host, match?.[1], match?.[2]);
+}
+
+function claimParts(
+  tracker: string,
+  host: string,
+  scope: string | undefined,
+  key: string | undefined,
+): IssueLink | null {
   return scope && key && Number.isSafeInteger(Number(key)) && Number(key) > 0
     ? { tracker, host, scope: scope.toLowerCase(), key }
     : null;

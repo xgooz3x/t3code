@@ -68,6 +68,7 @@ import {
   pullRequestReactionTooltip,
 } from "../pullRequest/pullRequestReactions.logic";
 import { PullRequestsUnavailableState } from "../pullRequest/PullRequestsUnavailableState";
+import { assigneeIdsAfterToggle } from "./issueAssignees";
 import {
   issueCloseReasonLabel,
   IssueStateGlyph,
@@ -386,11 +387,20 @@ function IssueAssigneePicker({
   );
   const toggle = async (candidate: IssueAssigneeCandidate) => {
     if (pending !== null) return;
+    const assignees = assigneeIdsAfterToggle(
+      detail.assignees,
+      candidatesQuery.data?.assignees ?? [],
+      candidate,
+    );
+    if (assignees === null) {
+      toastManager.add({
+        type: "error",
+        title: "Could not change assignees",
+        description: "A current assignee is not in the tracker's member list.",
+      });
+      return;
+    }
     setPending(candidate.id);
-    const login = candidate.login.toLowerCase();
-    const assignees = assigned.has(login)
-      ? detail.assignees.filter((actor) => actor.login.toLowerCase() !== login).map((a) => a.login)
-      : [...detail.assignees.map((actor) => actor.login), candidate.id];
     const result = await update({ environmentId, input: { ...reference, assignees } });
     setPending(null);
     if (result._tag === "Failure") {

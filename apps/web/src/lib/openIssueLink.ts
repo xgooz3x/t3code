@@ -82,7 +82,8 @@ export function useOpenIssueLink(
   return (event, targetUrl, targetEnvironmentId) => {
     if (event.metaKey || event.ctrlKey) return false;
     const resolvedPanelRef = panelRef ?? threadRef;
-    const environmentId = resolvedPanelRef?.environmentId ?? targetEnvironmentId;
+    // The pull request panel's ref names a placeholder environment; the link's own one is real.
+    const environmentId = targetEnvironmentId ?? resolvedPanelRef?.environmentId;
     if (resolvedPanelRef === undefined || environmentId === undefined) return false;
     if (serverConfigs.get(environmentId)?.environment.capabilities.issues !== true) return false;
     const parsed = parseIssueUrl(targetUrl);

@@ -206,14 +206,20 @@ describe("AzureDevOpsIssueTracker", () => {
                     Effect.orDie,
                     Effect.map((body) => {
                       bodies.push(body);
-                      return TestSourceControlHost.processOutput(encode({ workItems: [] }));
+                      return TestSourceControlHost.processOutput(
+                        encode({ workItems: [{ id: 7 }] }),
+                      );
                     }),
                   )
-                : Effect.succeed(TestSourceControlHost.processOutput(answer(args))),
+                : args[args.indexOf("--resource") + 1] === "workitems"
+                  ? Effect.succeed(
+                      TestSourceControlHost.processOutput(encode({ count: 1, value: [WORK_ITEM] })),
+                    )
+                  : Effect.succeed(TestSourceControlHost.processOutput(answer(args))),
           }),
         ),
       );
-      yield* api.listIssues({
+      const listed = yield* api.listIssues({
         cwd: "/w",
         host: "dev.azure.com",
         scope: "acme/Web App",
@@ -224,6 +230,7 @@ describe("AzureDevOpsIssueTracker", () => {
       });
       expect(bodies).toHaveLength(1);
       expect(bodies[0]).toContain("AND [System.State] NOT IN ('shipped')");
+      expect(listed.items.map((item) => item.key)).toEqual(["7"]);
     }).pipe(Effect.provide(NodeFileSystem.layer)),
   );
 

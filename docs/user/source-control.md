@@ -306,7 +306,9 @@ out from the matching organization and repository.
 ## Issues
 
 The Issues page lists the issues of every project whose remote is on a supported tracker
-(GitHub today), grouped per tracker account. Open it from the sidebar's utility row or with
+(GitHub, GitLab, Azure DevOps, or Forgejo), grouped per tracker account. To use Linear instead,
+connect it under **Issue trackers** in Settings → Source Control and choose which projects it
+serves. Open the page from the sidebar's utility row or with
 **Open issues** in the command palette. Filter by open or closed, by your involvement
 (assigned, opened by you, mentioning you), and by tracker; the search box asks the tracker
 itself where it can search. Press **Load more** at the end of a group to read further back.

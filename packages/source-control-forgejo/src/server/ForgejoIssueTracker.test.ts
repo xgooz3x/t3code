@@ -218,4 +218,33 @@ describe("ForgejoIssueTracker", () => {
       expect(page.nextCursor).toBe("3");
     }),
   );
+  it.effect("resolves label names on later pages before writing them", () =>
+    Effect.gen(function* () {
+      const puts: unknown[] = [];
+      const api = yield* tracker((input) => {
+        const [route, query] = input.path.split("?");
+        if (route === "repos/acme/web/labels") {
+          const page = new URLSearchParams(query).get("page");
+          return page === "1"
+            ? {
+                stdout: encode([{ id: 3, name: "bug", color: "d73a4a" }]),
+                stderr:
+                  'link: <https://forgejo.test/api/v1/repos/acme/web/labels?page=2>; rel="next"\n',
+              }
+            : page === "2"
+              ? { stdout: encode([{ id: 9, name: "ui", color: "000000" }]) }
+              : { stdout: encode([]) };
+        }
+        if (input.method === "PUT") puts.push(input.body);
+        return { stdout: "" };
+      });
+      const target = { cwd: "/w", host: "forgejo.test", scope: "acme/web", key: "42" };
+      yield* api.update({ ...target, labels: ["bug", "ui"] });
+      expect(puts).toEqual([{ labels: [3, 9] }]);
+
+      const error = yield* api.update({ ...target, labels: ["missing"] }).pipe(Effect.flip);
+      expect(error.detail).toContain("missing");
+      expect(puts).toHaveLength(1);
+    }),
+  );
 });

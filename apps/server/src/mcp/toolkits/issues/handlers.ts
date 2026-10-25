@@ -93,6 +93,7 @@ const make = Effect.gen(function* () {
   const requireProject = Effect.fn("IssuesToolkit.requireProject")(function* (
     requested: ProjectId | undefined,
   ) {
+    yield* McpInvocationContext.requireMcpCapability("issues");
     const projectId = requested ?? (yield* callerThread())?.projectId;
     if (projectId === undefined) return yield* new IssueProjectRequiredError();
     const project = yield* projects
@@ -113,6 +114,7 @@ const make = Effect.gen(function* () {
   const resolveTarget = Effect.fn("IssuesToolkit.resolveTarget")(function* (
     input: IssueTargetInput,
   ) {
+    yield* McpInvocationContext.requireMcpCapability("issues");
     if (input.url !== undefined) {
       const preferred = input.projectId ?? (yield* callerThread())?.projectId;
       const resolved = yield* issues.resolveUrl(input.url, preferred);

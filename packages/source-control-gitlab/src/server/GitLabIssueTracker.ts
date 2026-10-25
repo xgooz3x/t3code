@@ -278,12 +278,14 @@ export const make: Effect.Effect<IssueTrackerApi, never, GitLabCli.GitLabCli> = 
           ["per_page", String(PAGE_SIZE)],
           ["page", String(input.page)],
           ["order_by", "created_at"],
-          ["sort", "asc"],
+          // Newest first, so the first page is the latest conversation and the cursor leads back.
+          ["sort", "desc"],
         ])}`,
         decode: decodeIssueNotesJson,
       }).pipe(
         Effect.map((notes) => ({
           ...notes,
+          comments: notes.comments.toReversed(),
           nextCursor: notes.rawCount < PAGE_SIZE ? null : String(input.page + 1),
         })),
       );

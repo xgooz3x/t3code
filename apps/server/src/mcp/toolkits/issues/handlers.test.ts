@@ -201,6 +201,20 @@ describe("issue toolkit handlers", () => {
     }),
   );
 
+  it.effect("refuses an explicit URL and project without the issues capability", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+      const error = yield* harness
+        .call(
+          "read_issue",
+          { url: "https://github.com/T3Tools/T3Code/issues/7", projectId: PROJECT_ID },
+          ["pull-requests"],
+        )
+        .pipe(Effect.flip);
+      expect(error).toMatchObject({ _tag: "McpCapabilityUnavailableError", capability: "issues" });
+    }),
+  );
+
   it.effect("links by URL with source agent on the token's thread", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();

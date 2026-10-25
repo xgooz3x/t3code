@@ -25,6 +25,10 @@ describe("parseIssueUrl", () => {
       { tracker: "azure-devops", host: "dev.azure.com", scope: "org/project", key: "55" },
     ],
     [
+      "https://Org.visualstudio.com/Project/_workitems/edit/56",
+      { tracker: "azure-devops", host: "org.visualstudio.com", scope: "org/project", key: "56" },
+    ],
+    [
       "https://codeberg.org/forgejo/forgejo/issues/3",
       { tracker: "forgejo", host: "codeberg.org", scope: "forgejo/forgejo", key: "3" },
     ],
