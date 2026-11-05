@@ -80,8 +80,8 @@ function sameSnapshot(left: ThreadIssueSnapshot | null, right: ThreadIssueSnapsh
   );
 }
 
-function isStale(link: ThreadIssueLink, nowMs: number, staleAfterMs: number): boolean {
-  return link.snapshot === null || nowMs - Date.parse(link.snapshot.syncedAt) > staleAfterMs;
+function linkReadKey(threadId: ThreadId, link: ThreadIssueLink): string {
+  return `${threadId}|${link.tracker}|${link.host}/${link.scope}#${link.key}`;
 }
 
 const make = Effect.gen(function* () {
@@ -95,6 +95,22 @@ const make = Effect.gen(function* () {
       Effect.map((uuid) => CommandId.make(`server:thread-issue-${tag}:${threadId}:${uuid}`)),
     );
 
+  // An unchanged read writes no event, so syncedAt alone would make it look stale on every sweep.
+  const lastReadAtMs = new Map<string, number>();
+  const isStale = (
+    threadId: ThreadId,
+    link: ThreadIssueLink,
+    nowMs: number,
+    staleAfterMs: number,
+  ) =>
+    link.snapshot === null ||
+    nowMs -
+      Math.max(
+        Date.parse(link.snapshot.syncedAt),
+        lastReadAtMs.get(linkReadKey(threadId, link)) ?? 0,
+      ) >
+      staleAfterMs;
+
   // Best effort for background refreshes: a thread that cannot be read is skipped, not failed.
   const shellOf = (threadId: ThreadId): Effect.Effect<OrchestrationV2ThreadShell | null> =>
     orchestrator.getThreadShell(threadId).pipe(Effect.orElseSucceed(() => null));
@@ -105,6 +121,7 @@ const make = Effect.gen(function* () {
   ) {
     const detail = yield* issues.detail(threadIssueRefOf(link));
     const now = yield* DateTime.now;
+    lastReadAtMs.set(linkReadKey(threadId, link), DateTime.toEpochMillis(now));
     const snapshot: ThreadIssueSnapshot = {
       displayKey: detail.displayKey,
       title: detail.title,
@@ -134,7 +151,8 @@ const make = Effect.gen(function* () {
     if (thread === null || thread.deletedAt !== null) return;
     const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
     const links = (thread.issues ?? []).filter(
-      (link) => request.staleAfterMs === null || isStale(link, nowMs, request.staleAfterMs),
+      (link) =>
+        request.staleAfterMs === null || isStale(thread.id, link, nowMs, request.staleAfterMs),
     );
     yield* Effect.forEach(
       links,

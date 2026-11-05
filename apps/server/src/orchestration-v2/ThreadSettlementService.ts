@@ -385,7 +385,10 @@ export const make = Effect.gen(function* () {
         (thread) =>
           resolveProjectSettings(settings, thread.projectId).settings
             .sidebarAutoSettleOnIssueClose &&
-          (thread.issues ?? []).some((link) => link.snapshot?.state.category !== "closed"),
+          // Closed snapshots saved before closedAt existed need one read to become settleable.
+          (thread.issues ?? []).some(
+            (link) => link.snapshot?.state.category !== "closed" || link.snapshot.closedAt == null,
+          ),
       ),
       (thread) =>
         threadIssues.refresh(thread.id, {

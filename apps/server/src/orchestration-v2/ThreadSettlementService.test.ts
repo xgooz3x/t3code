@@ -961,9 +961,14 @@ describe("ThreadSettlementServiceV2 worker", () => {
         });
         const closed = makeThread("issue-closed", { issues: [issueLink("1", "closed")] });
         const open = makeThread("issue-open", { issues: [issueLink("2", "open")] });
+        // Written before snapshots carried closedAt: not settleable until it is read again.
+        const { closedAt: _, ...legacySnapshot } = issueLink("3", "closed").snapshot;
+        const legacy = makeThread("issue-legacy", {
+          issues: [{ ...issueLink("3", "closed"), snapshot: legacySnapshot }],
+        });
         const run = Effect.fn(function* (sidebarAutoSettleOnIssueClose: boolean) {
           const fixture = yield* makeHarness({
-            snapshot: makeSnapshot([closed, open]),
+            snapshot: makeSnapshot([closed, open, legacy]),
             settings: {
               ...DEFAULT_SERVER_SETTINGS,
               sidebarAutoSettleAfterDays: null,
@@ -984,6 +989,7 @@ describe("ThreadSettlementServiceV2 worker", () => {
           settled: [closed.id],
           refreshed: [
             { threadId: open.id, staleAfterMs: ThreadIssueService.BACKGROUND_STALE_AFTER_MS },
+            { threadId: legacy.id, staleAfterMs: ThreadIssueService.BACKGROUND_STALE_AFTER_MS },
           ],
         });
         expect(yield* run(false)).toEqual({ settled: [], refreshed: [] });
