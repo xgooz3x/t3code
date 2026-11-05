@@ -447,6 +447,7 @@ export const make = Effect.gen(function* () {
           nowMs,
           autoSettleAfterDays: projectSettings.sidebarAutoSettleAfterDays,
           autoSettleOnMerge: projectSettings.sidebarAutoSettleOnMerge,
+          autoSettleOnIssueClose: projectSettings.sidebarAutoSettleOnIssueClose,
           autoSettleKeepPullRequests: projectSettings.sidebarAutoSettleKeepPullRequests,
         });
         return settledAt === null ? Effect.succeed(thread) : settleThread(thread, null);
