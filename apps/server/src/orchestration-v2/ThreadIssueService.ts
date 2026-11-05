@@ -3,10 +3,11 @@
  * and the snapshot each link carries so the thread can show a title and state without a tracker
  * read.
  *
- * There is no poller. A snapshot is written when the link is made, refreshed when the thread's
- * turn ends — the agent may have closed or renamed the issue — and refreshed when the user opens
- * the thread after the snapshot has gone stale. Those are the moments the state can have changed
- * and someone is looking; a sweep would spend tracker reads on threads nobody is reading.
+ * There is no general poller. A snapshot is written when the link is made, refreshed when the
+ * thread's turn ends — the agent may have closed or renamed the issue — and refreshed when the
+ * user opens the thread after the snapshot has gone stale. Those are the moments the state can
+ * have changed and someone is looking. The one exception is settlement: an idle thread that would
+ * settle when its issues close asks for a slow refresh, since nobody is looking at it.
  *
  * @module orchestration-v2/ThreadIssueService
  */
@@ -39,6 +40,8 @@ import * as Orchestrator from "./Orchestrator.ts";
 
 /** A snapshot older than this is re-read when the thread is opened. */
 const STALE_AFTER_MS = 5 * 60_000;
+/** How stale a snapshot may get on a thread nobody is looking at, which only settlement reads. */
+export const BACKGROUND_STALE_AFTER_MS = 15 * 60_000;
 const REFRESH_CONCURRENCY = 4;
 
 export interface LinkThreadIssueInput {
@@ -63,10 +66,10 @@ export class ThreadIssueService extends Context.Service<
     readonly unlink: (
       input: UnlinkThreadIssueInput,
     ) => Effect.Effect<{ readonly wasLinked: boolean }, Orchestrator.OrchestratorV2Error>;
-    /** Re-reads every link's snapshot now; `staleOnly` skips ones read recently. */
+    /** Re-reads the thread's link snapshots; `staleAfterMs` skips ones read more recently. */
     readonly refresh: (
       threadId: ThreadId,
-      options?: { readonly staleOnly?: boolean },
+      options?: { readonly staleAfterMs?: number },
     ) => Effect.Effect<void>;
     readonly start: () => Effect.Effect<void, never, Scope.Scope>;
     readonly drain: Effect.Effect<void>;
@@ -80,12 +83,13 @@ function sameSnapshot(left: ThreadIssueSnapshot | null, right: ThreadIssueSnapsh
     left.title === right.title &&
     left.state.category === right.state.category &&
     left.state.name === right.state.name &&
-    left.state.closeReason === right.state.closeReason
+    left.state.closeReason === right.state.closeReason &&
+    (left.closedAt ?? null) === (right.closedAt ?? null)
   );
 }
 
-function isStale(link: ThreadIssueLink, nowMs: number): boolean {
-  return link.snapshot === null || nowMs - Date.parse(link.snapshot.syncedAt) > STALE_AFTER_MS;
+function isStale(link: ThreadIssueLink, nowMs: number, staleAfterMs: number): boolean {
+  return link.snapshot === null || nowMs - Date.parse(link.snapshot.syncedAt) > staleAfterMs;
 }
 
 const make = Effect.gen(function* () {
@@ -113,6 +117,7 @@ const make = Effect.gen(function* () {
       displayKey: detail.displayKey,
       title: detail.title,
       state: detail.state,
+      closedAt: detail.closedAt,
       syncedAt: DateTime.formatIso(now),
     };
     if (sameSnapshot(link.snapshot, snapshot)) return;
@@ -130,13 +135,14 @@ const make = Effect.gen(function* () {
 
   const refreshThread = Effect.fn("ThreadIssueService.refreshThread")(function* (request: {
     readonly threadId: ThreadId;
-    readonly staleOnly: boolean;
+    /** Null re-reads every link. */
+    readonly staleAfterMs: number | null;
   }) {
     const thread = yield* shellOf(request.threadId);
     if (thread === null || thread.deletedAt !== null) return;
     const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
     const links = (thread.issues ?? []).filter(
-      (link) => !request.staleOnly || isStale(link, nowMs),
+      (link) => request.staleAfterMs === null || isStale(link, nowMs, request.staleAfterMs),
     );
     yield* Effect.forEach(
       links,
@@ -176,7 +182,7 @@ const make = Effect.gen(function* () {
         url: input.url,
         source: input.source,
       });
-      yield* worker.enqueue({ threadId: input.threadId, staleOnly: true });
+      yield* worker.enqueue({ threadId: input.threadId, staleAfterMs: STALE_AFTER_MS });
       return { alreadyLinked: false };
     },
   );
@@ -201,25 +207,28 @@ const make = Effect.gen(function* () {
   );
 
   const refresh: ThreadIssueService["Service"]["refresh"] = (threadId, options) =>
-    worker.enqueue({ threadId, staleOnly: options?.staleOnly ?? false });
+    worker.enqueue({
+      threadId,
+      staleAfterMs: options?.staleAfterMs ?? null,
+    });
 
   const processEvent = (event: OrchestrationV2DomainEvent) => {
     switch (event.type) {
       // A link made from a client (web dispatches the command directly) has no snapshot yet.
       case "thread.issue-synced":
         return (event.payload.issues ?? []).some((link) => link.snapshot === null)
-          ? worker.enqueue({ threadId: event.threadId, staleOnly: true })
+          ? worker.enqueue({ threadId: event.threadId, staleAfterMs: STALE_AFTER_MS })
           : Effect.void;
       case "thread.visited":
         return (event.payload.issues ?? []).length > 0
-          ? worker.enqueue({ threadId: event.threadId, staleOnly: true })
+          ? worker.enqueue({ threadId: event.threadId, staleAfterMs: STALE_AFTER_MS })
           : Effect.void;
       case "run.updated":
         return event.payload.status === "completed" ||
           event.payload.status === "failed" ||
           event.payload.status === "cancelled" ||
           event.payload.status === "interrupted"
-          ? worker.enqueue({ threadId: event.threadId, staleOnly: false })
+          ? worker.enqueue({ threadId: event.threadId, staleAfterMs: null })
           : Effect.void;
       default:
         return Effect.void;

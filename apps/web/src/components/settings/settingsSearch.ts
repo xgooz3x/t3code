@@ -352,6 +352,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     scope: "project-defaults",
   },
   {
+    id: "auto-settle-closed-issues",
+    title: "Auto-settle threads when their issues close",
+    to: "/settings/general",
+    searchTerms: ["issue tracker linear github closed done automatically sidebar"],
+    requiresThreadAutoSettlement: true,
+    scope: "project-defaults",
+  },
+  {
     id: "days-before-auto-settle",
     title: "Days of inactivity before auto-settle",
     to: "/settings/general",

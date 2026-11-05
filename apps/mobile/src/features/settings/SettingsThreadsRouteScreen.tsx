@@ -136,6 +136,7 @@ function AutoSettleSettingsRows() {
     syncTargets.some(
       (target) =>
         target.sources.sidebarAutoSettleOnMerge === "project" ||
+        target.sources.sidebarAutoSettleOnIssueClose === "project" ||
         target.sources.sidebarAutoSettleAfterDays === "project",
     );
   const clearProjectOverrides = () => {
@@ -148,6 +149,7 @@ function AutoSettleSettingsRows() {
       return;
     const writes = planMobileScopedSettingsClear(syncTargets, [
       "sidebarAutoSettleOnMerge",
+      "sidebarAutoSettleOnIssueClose",
       "sidebarAutoSettleAfterDays",
     ]);
     if (writes.length === 0) return;
@@ -200,6 +202,13 @@ function AutoSettleSettingsRows() {
           value={referenceSettings.sidebarAutoSettleOnMerge}
           disabled={disabled}
           onValueChange={(value) => writeToAll({ sidebarAutoSettleOnMerge: value })}
+        />
+        <SettingsSwitchRow
+          icon="checkmark.circle"
+          label="Auto-settle when issues close"
+          value={referenceSettings.sidebarAutoSettleOnIssueClose}
+          disabled={disabled}
+          onValueChange={(value) => writeToAll({ sidebarAutoSettleOnIssueClose: value })}
         />
         <SettingsSwitchRow
           icon="clock"

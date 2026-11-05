@@ -447,6 +447,10 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sidebarAutoSettleOnMerge !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge
       ? ["Auto-settle merged threads"]
       : []),
+    ...(settings.sidebarAutoSettleOnIssueClose !==
+    DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnIssueClose
+      ? ["Auto-settle when issues close"]
+      : []),
     ...(settings.autoResumeLimitedThreads !== DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads
       ? ["Auto-resume limited threads"]
       : []),
@@ -612,6 +616,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
+      sidebarAutoSettleOnIssueClose: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnIssueClose,
       autoResumeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.autoResumeLimitedThreads,
       snoozeLimitedThreads: DEFAULT_UNIFIED_SETTINGS.snoozeLimitedThreads,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
@@ -1080,6 +1085,37 @@ export function GeneralSettingsPanel() {
                     updateSettings({ sidebarAutoSettleOnMerge: Boolean(checked) })
                   }
                   aria-label="Auto-settle merged threads"
+                />
+              }
+            />
+
+            <SettingsRow
+              serverScoped
+              settingKeys={["sidebarAutoSettleOnIssueClose"]}
+              {...searchableSetting("auto-settle-closed-issues")}
+              description="Settle a thread once every issue linked to it is closed."
+              resetAction={
+                settings.sidebarAutoSettleOnIssueClose !==
+                DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnIssueClose ? (
+                  <SettingResetButton
+                    label="auto-settle on issue close"
+                    onClick={() =>
+                      updateSettings({
+                        sidebarAutoSettleOnIssueClose:
+                          DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnIssueClose,
+                      })
+                    }
+                  />
+                ) : null
+              }
+              control={
+                <ScopedSwitch
+                  settingKeys={["sidebarAutoSettleOnIssueClose"]}
+                  checked={settings.sidebarAutoSettleOnIssueClose}
+                  onCheckedChange={(checked) =>
+                    updateSettings({ sidebarAutoSettleOnIssueClose: Boolean(checked) })
+                  }
+                  aria-label="Auto-settle threads when their issues close"
                 />
               }
             />

@@ -509,6 +509,8 @@ export const ThreadIssueSnapshot = Schema.Struct({
   displayKey: TrimmedNonEmptyString,
   title: TrimmedNonEmptyString,
   state: IssueState,
+  /** Absent on snapshots written before settlement read it. */
+  closedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   syncedAt: IsoDateTime,
 });
 export type ThreadIssueSnapshot = typeof ThreadIssueSnapshot.Type;
