@@ -66,7 +66,7 @@ import {
   pullRequestReactionEmoji,
   pullRequestReactionName,
   pullRequestReactionTooltip,
-} from "../pullRequest/pullRequestReactions.logic";
+} from "@t3tools/client-runtime/pull-request-reactions";
 import { PullRequestsUnavailableState } from "../pullRequest/PullRequestsUnavailableState";
 import { assigneeIdsAfterToggle } from "./issueAssignees";
 import {

@@ -1,15 +1,7 @@
 /**
- * IssueTrackerDriver — what an issue tracker package hands the server.
- *
- * One driver per tracker kind. The server lists its drivers once and the registry iterates that
- * list, so adding a tracker means writing its package and adding its driver to the list. Git
- * hosts ship their driver inside their source control package; a standalone tracker (Linear,
- * Jira) ships its own.
- *
- * `make` yields what it needs from the environment, and its `R` channel is the full list the
- * server must provide.
- *
- * @module issue-tracker-core/server/driver
+ * What an issue tracker package hands the server: one driver per tracker kind. Git hosts ship
+ * theirs inside their source control package; a standalone tracker ships its own. `make`'s `R`
+ * channel is everything the server must provide.
  */
 import type { IssueTrackerKind } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";

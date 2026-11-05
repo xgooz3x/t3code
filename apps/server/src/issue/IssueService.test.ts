@@ -6,6 +6,7 @@ import * as Redacted from "effect/Redacted";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import * as GitHubCredentials from "@t3tools/source-control-github/server/GitHubCredentials";
+import * as GitHubAppSignIn from "@t3tools/source-control-github/server/GitHubAppSignIn";
 import * as GitHubQuota from "@t3tools/source-control-github/server/GitHubQuota";
 import * as GitHubRest from "@t3tools/source-control-github/server/GitHubRest";
 import * as GitHubIssueTracker from "@t3tools/source-control-github/server/GitHubIssueTracker";
@@ -77,7 +78,7 @@ function project(input: {
               remoteName: "origin",
               remoteUrl: `https://${host}/${input.repository}.git`,
             },
-            provider: input.provider ?? "github",
+            provider: SourceControlProviderKind.make(input.provider ?? "github"),
             displayName: input.repository,
           },
         }
@@ -284,6 +285,11 @@ describe("IssueService", () => {
             Layer.mergeAll(
               SourceControlRateLimit.layer,
               GitHubQuota.layer,
+              Layer.mock(GitHubAppSignIn.GitHubAppSignIn)({
+                enabled: false,
+                token: () => Effect.succeedNone,
+                invalidate: () => Effect.void,
+              }),
               Layer.mock(GitHubCredentials.GitHubCredentials)({
                 get: (host) =>
                   Effect.succeed({
@@ -292,6 +298,7 @@ describe("IssueService", () => {
                     source: "gh" as const,
                     fingerprint: "test",
                   }),
+                saved: () => Effect.succeedNone,
               }),
               Layer.succeed(
                 HttpClient.HttpClient,

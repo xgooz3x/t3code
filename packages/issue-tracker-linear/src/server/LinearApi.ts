@@ -1,14 +1,7 @@
 /**
- * Linear's GraphQL API over the platform HttpClient, signed with the personal API key the user
- * saved in Settings. The operations live in `LinearApi.graphql`; their client is generated from
- * `schema/linear.graphql` (`vp run generate`), so the tracker above sees Linear's shapes and
- * nothing looser.
- *
- * Linear rate-limits by query complexity and reports the budget in `x-ratelimit-*` headers; a
- * refusal arrives as HTTP 429 or as a `RATELIMITED` GraphQL error on a 400, and both map to
- * `rate-limited` with the reset time when Linear names one.
- *
- * @module issue-tracker-linear/server/LinearApi
+ * Linear's GraphQL API, signed with the user's saved personal API key. The client is generated from
+ * `schema/linear.graphql` (`vp run generate`). A 429, or a `RATELIMITED` error on a 400, maps to
+ * `rate-limited` with Linear's reset time when it names one.
  */
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";

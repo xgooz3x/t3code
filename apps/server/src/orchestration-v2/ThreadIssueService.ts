@@ -1,15 +1,7 @@
 /**
- * Issues linked to threads: the link and unlink commands every surface (web, MCP) goes through,
- * and the snapshot each link carries so the thread can show a title and state without a tracker
- * read.
- *
- * There is no general poller. A snapshot is written when the link is made, refreshed when the
- * thread's turn ends — the agent may have closed or renamed the issue — and refreshed when the
- * user opens the thread after the snapshot has gone stale. Those are the moments the state can
- * have changed and someone is looking. The one exception is settlement: an idle thread that would
- * settle when its issues close asks for a slow refresh, since nobody is looking at it.
- *
- * @module orchestration-v2/ThreadIssueService
+ * Links issues to threads and keeps each link's snapshot: written on link, refreshed when a turn
+ * ends and when the user opens a thread whose snapshot is stale. The only background read is a
+ * slow refresh for idle threads that would settle once their issues close.
  */
 import {
   CommandId,
@@ -27,9 +19,9 @@ import {
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Layer from "effect/Layer";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -95,10 +87,10 @@ function isStale(link: ThreadIssueLink, nowMs: number, staleAfterMs: number): bo
 const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const issues = yield* IssueService.IssueService;
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
 
   const commandId = (tag: string, threadId: ThreadId) =>
-    crypto.randomUUIDv4().pipe(
+    random.uuidV4().pipe(
       Effect.orDie,
       Effect.map((uuid) => CommandId.make(`server:thread-issue-${tag}:${threadId}:${uuid}`)),
     );
