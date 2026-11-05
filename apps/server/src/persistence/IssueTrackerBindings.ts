@@ -73,7 +73,7 @@ const make = Effect.gen(function* () {
       ),
       Effect.mapError(toSqlOrDecodeError("listIssueTrackerBindings", "IssueTrackerBinding")),
     ),
-    set: (input) =>
+    set: Effect.fn("IssueTrackerBindingsRepository.set")((input) =>
       (input.binding === null
         ? sql`DELETE FROM issue_tracker_bindings WHERE project_id = ${input.projectId}`
         : sql`
@@ -88,13 +88,15 @@ const make = Effect.gen(function* () {
           (cause) => new PersistenceSqlError({ operation: "setIssueTrackerBinding", cause }),
         ),
       ),
-    removeTracker: (tracker) =>
+    ),
+    removeTracker: Effect.fn("IssueTrackerBindingsRepository.removeTracker")((tracker) =>
       sql`DELETE FROM issue_tracker_bindings WHERE tracker = ${tracker}`.pipe(
         Effect.asVoid,
         Effect.mapError(
           (cause) => new PersistenceSqlError({ operation: "removeIssueTrackerBindings", cause }),
         ),
       ),
+    ),
   });
 });
 

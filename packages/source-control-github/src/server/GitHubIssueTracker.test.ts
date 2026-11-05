@@ -7,6 +7,7 @@ import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { IssueTemplateList } from "@t3tools/contracts";
 import * as GitHubCredentials from "./GitHubCredentials.ts";
+import * as GitHubAppSignIn from "./GitHubAppSignIn.ts";
 import * as GitHubRest from "./GitHubRest.ts";
 import * as GitHubQuota from "./GitHubQuota.ts";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
@@ -140,6 +141,11 @@ function transport(httpClient: HttpClient.HttpClient) {
     Layer.provideMerge(
       Layer.mergeAll(
         GitHubQuota.layer,
+        Layer.mock(GitHubAppSignIn.GitHubAppSignIn)({
+          enabled: false,
+          token: () => Effect.succeedNone,
+          invalidate: () => Effect.void,
+        }),
         SourceControlRateLimit.layer,
         Layer.mock(GitHubCredentials.GitHubCredentials)({
           get: (host) =>
@@ -149,6 +155,7 @@ function transport(httpClient: HttpClient.HttpClient) {
               source: "gh" as const,
               fingerprint: "test",
             }),
+          saved: () => Effect.succeedNone,
         }),
         Layer.succeed(HttpClient.HttpClient, httpClient),
       ),
