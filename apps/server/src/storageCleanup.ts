@@ -598,10 +598,11 @@ const make = Effect.gen(function* () {
       if (result === null) return null;
       if (result.exitCode === 0 || result.exitCode === allowedExitCode) return result;
       const stderr = result.stderr.toLowerCase();
-      // Newer git words a broken .git file as "gitfile does not point to a valid repository".
+      // Newer git reports a broken .git file as "not point to a valid repository" or "invalid gitfile format".
       if (
         stderr.includes("not a git repository") ||
-        stderr.includes("not point to a valid repository")
+        stderr.includes("not point to a valid repository") ||
+        stderr.includes("invalid gitfile format")
       )
         return null;
       return yield* failure(
