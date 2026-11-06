@@ -5,6 +5,7 @@ import {
   DEFAULT_SERVER_SETTINGS,
   ProjectId,
   EventId,
+  IssueTrackerKind,
   ProviderInstanceId,
   RunId,
   ThreadId,
@@ -42,6 +43,7 @@ import * as TerminalManager from "../terminal/Manager.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import * as ThreadIssueService from "./ThreadIssueService.ts";
 import * as ThreadSettlementService from "./ThreadSettlementService.ts";
 
 const NOW_MS = Date.parse("2026-06-10T12:00:00.000Z");
@@ -446,6 +448,96 @@ describe("resolveAutoSettlementAt", () => {
   });
 });
 
+describe("resolveAutoSettlementAt with linked issues", () => {
+  const issue = (
+    key: string,
+    linkedAt: DateTime.Utc,
+    state: { readonly closedAt: DateTime.Utc } | "open" | "unsynced",
+  ) => ({
+    tracker: IssueTrackerKind.make("github"),
+    host: "github.com",
+    scope: "owner/repository",
+    key,
+    projectId: ProjectId.make("project-1"),
+    url: `https://github.com/owner/repository/issues/${key}`,
+    source: "manual" as const,
+    linkedAt: DateTime.formatIso(linkedAt),
+    snapshot:
+      state === "unsynced"
+        ? null
+        : {
+            displayKey: `#${key}`,
+            title: "Issue",
+            state:
+              state === "open"
+                ? { category: "open" as const, name: "Open" }
+                : { category: "closed" as const, name: "Closed" },
+            closedAt: state === "open" ? null : DateTime.formatIso(state.closedAt),
+            syncedAt: DateTime.formatIso(at(-1_000)),
+          },
+  });
+  const linkedAt = at(-3 * 60 * 60 * 1_000);
+  const thread = (issues: ReadonlyArray<ReturnType<typeof issue>>) =>
+    shell({
+      latestUserMessageAt: at(-2 * 60 * 60 * 1_000),
+      latestRunCompletedAt: at(-90 * 60 * 1_000),
+      issues,
+    });
+  const input = (issues: ReadonlyArray<ReturnType<typeof issue>>) => ({
+    thread: thread(issues),
+    pullRequest: null,
+    nowMs: NOW_MS,
+    autoSettleAfterDays: null,
+    autoSettleOnMerge: true,
+    autoSettleOnIssueClose: true,
+  });
+  const closed = issue("1", linkedAt, { closedAt: at(-60 * 60 * 1_000) });
+
+  it("settles at the last activity once its only linked issue closes", () => {
+    expect(ThreadSettlementService.resolveAutoSettlementAt(input([closed]))).toEqual(
+      at(-90 * 60 * 1_000),
+    );
+  });
+
+  it("waits until every linked issue is closed", () => {
+    for (const other of [issue("2", linkedAt, "open"), issue("2", linkedAt, "unsynced")]) {
+      expect(ThreadSettlementService.resolveAutoSettlementAt(input([closed, other]))).toBeNull();
+    }
+  });
+
+  it("does not settle when the setting is off", () => {
+    expect(
+      ThreadSettlementService.resolveAutoSettlementAt({
+        ...input([closed]),
+        autoSettleOnIssueClose: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not settle on an issue closed before the user's last message", () => {
+    const early = issue("1", linkedAt, { closedAt: at(-150 * 60 * 1_000) });
+    expect(ThreadSettlementService.resolveAutoSettlementAt(input([early]))).toBeNull();
+  });
+
+  it("ignores issues that were already closed when linked", () => {
+    // The agent closed an issue as part of the work, then linked it as a record.
+    const recorded = issue("2", at(-30 * 60 * 1_000), { closedAt: at(-40 * 60 * 1_000) });
+    expect(ThreadSettlementService.resolveAutoSettlementAt(input([recorded]))).toBeNull();
+    expect(ThreadSettlementService.resolveAutoSettlementAt(input([closed, recorded]))).toEqual(
+      at(-90 * 60 * 1_000),
+    );
+  });
+
+  it("does not settle a thread opted out of auto-settlement", () => {
+    expect(
+      ThreadSettlementService.resolveAutoSettlementAt({
+        ...input([closed]),
+        thread: { ...thread([closed]), autoSettleDisabledAt: at(-DAY_MS) },
+      }),
+    ).toBeNull();
+  });
+});
+
 const NOW = "2026-08-28T12:00:00.000Z";
 const PROJECT_ID = ProjectId.make("settlement-project");
 
@@ -587,6 +679,9 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
   >([]);
   const summaryRecovery = yield* Ref.make<ReadonlyArray<boolean | undefined>>([]);
   const invalidatedCwds = yield* Ref.make<ReadonlyArray<string>>([]);
+  const issueRefreshes = yield* Ref.make<
+    ReadonlyArray<{ readonly threadId: string; readonly staleAfterMs: number | undefined }>
+  >([]);
   const domainEvents = yield* PubSub.unbounded<OrchestrationV2DomainEvent>();
   const closedIdle = yield* Queue.unbounded<{ readonly threadId: string }>();
   const scriptRuns =
@@ -701,6 +796,13 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
         Effect.map((subscription) => Stream.fromSubscription(subscription)),
       ),
     }),
+    Layer.mock(ThreadIssueService.ThreadIssueService)({
+      refresh: (threadId, refreshOptions) =>
+        Ref.update(issueRefreshes, (calls) => [
+          ...calls,
+          { threadId, staleAfterMs: refreshOptions?.staleAfterMs },
+        ]),
+    }),
     Layer.succeed(ServerSettings.ServerSettingsService, serverSettings),
     Layer.succeed(ServerActivation.ServerActivation, Deferred.await(activation)),
     Layer.succeed(SecureRandom.SecureRandom, testCrypto),
@@ -732,6 +834,7 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
     summaryCalls,
     summaryRecovery,
     invalidatedCwds,
+    issueRefreshes,
     closedIdle,
     scriptRuns,
     publishEvent: (event: OrchestrationV2DomainEvent) => PubSub.publish(domainEvents, event),
@@ -831,6 +934,65 @@ describe("ThreadSettlementServiceV2 worker", () => {
             thread.id,
           ]);
         }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
+  it.effect("settles a thread whose linked issue closed, and refreshes idle open issues", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const issueLink = (key: string, state: "open" | "closed") => ({
+          tracker: IssueTrackerKind.make("github"),
+          host: "github.com",
+          scope: "owner/repository",
+          key,
+          projectId: PROJECT_ID,
+          url: `https://github.com/owner/repository/issues/${key}`,
+          source: "manual" as const,
+          linkedAt: "2026-08-20T00:00:00.000Z",
+          snapshot: {
+            displayKey: `#${key}`,
+            title: "Issue",
+            state: { category: state, name: state === "open" ? "Open" : "Closed" },
+            closedAt: state === "open" ? null : NOW,
+            syncedAt: NOW,
+          },
+        });
+        const closed = makeThread("issue-closed", { issues: [issueLink("1", "closed")] });
+        const open = makeThread("issue-open", { issues: [issueLink("2", "open")] });
+        // Written before snapshots carried closedAt: not settleable until it is read again.
+        const { closedAt: _, ...legacySnapshot } = issueLink("3", "closed").snapshot;
+        const legacy = makeThread("issue-legacy", {
+          issues: [{ ...issueLink("3", "closed"), snapshot: legacySnapshot }],
+        });
+        const run = Effect.fn(function* (sidebarAutoSettleOnIssueClose: boolean) {
+          const fixture = yield* makeHarness({
+            snapshot: makeSnapshot([closed, open, legacy]),
+            settings: {
+              ...DEFAULT_SERVER_SETTINGS,
+              sidebarAutoSettleAfterDays: null,
+              sidebarAutoSettleOnIssueClose,
+            },
+          });
+          return yield* Effect.gen(function* () {
+            const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+            yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+            return {
+              settled: (yield* Ref.get(fixture.commands)).map((command) => command.threadId),
+              refreshed: yield* Ref.get(fixture.issueRefreshes),
+            };
+          }).pipe(Effect.provide(fixture.layer));
+        });
+
+        expect(yield* run(true)).toEqual({
+          settled: [closed.id],
+          refreshed: [
+            { threadId: open.id, staleAfterMs: ThreadIssueService.BACKGROUND_STALE_AFTER_MS },
+            { threadId: legacy.id, staleAfterMs: ThreadIssueService.BACKGROUND_STALE_AFTER_MS },
+          ],
+        });
+        expect(yield* run(false)).toEqual({ settled: [], refreshed: [] });
       }),
     ),
   );

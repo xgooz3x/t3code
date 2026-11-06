@@ -596,7 +596,11 @@ const layerOrchestrationApplication = Layer.merge(
 
 const layerThreadSettlementWorker = Layer.effectDiscard(
   ThreadSettlementService.make.pipe(Effect.flatMap((service) => service.start())),
-).pipe(Layer.provide(layerPullRequestService), Layer.provide(ProjectionStoreV2.layer));
+).pipe(
+  Layer.provide(layerPullRequestService),
+  Layer.provide(layerThreadIssueService),
+  Layer.provide(ProjectionStoreV2.layer),
+);
 
 const layerIdleCompactionWorker = Layer.effectDiscard(
   IdleCompactionService.make.pipe(Effect.flatMap((service) => service.start())),

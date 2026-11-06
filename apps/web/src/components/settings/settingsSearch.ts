@@ -510,6 +510,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     scope: "project-defaults",
   },
   {
+    id: "auto-settle-closed-issues",
+    title: "Auto-settle threads when their issues close",
+    to: "/settings/threads",
+    searchTerms: ["issue tracker linear github closed done automatically sidebar"],
+    requiresThreadAutoSettlement: true,
+    scope: "project-defaults",
+  },
+  {
     id: "keep-threads-with-pull-requests",
     title: "Keep threads with a PR",
     to: "/settings/threads",

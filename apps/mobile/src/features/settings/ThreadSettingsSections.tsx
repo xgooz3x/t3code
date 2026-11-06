@@ -141,6 +141,13 @@ export function AutoSettleSettingsRows(props: {
           onValueChange={(value) => writeToAll({ sidebarAutoSettleOnMerge: value })}
         />
         <SettingsSwitchRow
+          icon="checkmark.circle"
+          label="Auto-settle when issues close"
+          value={referenceSettings.sidebarAutoSettleOnIssueClose}
+          disabled={disabledFor("sidebarAutoSettleOnIssueClose")}
+          onValueChange={(value) => writeToAll({ sidebarAutoSettleOnIssueClose: value })}
+        />
+        <SettingsSwitchRow
           icon="clock"
           label="Auto-settle inactive threads"
           value={afterDays !== null}
@@ -171,7 +178,11 @@ export function AutoSettleSettingsRows(props: {
             <Button
               label="Apply auto-settle defaults"
               tone="secondary"
-              disabled={disabledFor("sidebarAutoSettleOnMerge", "sidebarAutoSettleAfterDays")}
+              disabled={disabledFor(
+                "sidebarAutoSettleOnMerge",
+                "sidebarAutoSettleOnIssueClose",
+                "sidebarAutoSettleAfterDays",
+              )}
               onPress={() => writeToAll(autoSettlePatch)}
             />
           </View>

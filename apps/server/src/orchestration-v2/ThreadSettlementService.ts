@@ -35,6 +35,7 @@ import * as ProjectStore from "./ProjectStore.ts";
 import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import * as ThreadIssueService from "./ThreadIssueService.ts";
 
 export interface SettlementPullRequest {
   readonly state: "open" | "closed" | "merged";
@@ -143,6 +144,48 @@ function pullRequestSettles(
   return pullRequestAtMs >= userAnchorMs;
 }
 
+type SettlementIssueLink = NonNullable<
+  ProjectionStore.ProjectionSettlementCandidate["issues"]
+>[number];
+
+function issueClosedAtMs(link: SettlementIssueLink): number | null {
+  if (link.snapshot?.state.category !== "closed") return null;
+  const closedAtMs = Date.parse(link.snapshot.closedAt ?? "");
+  return Number.isNaN(closedAtMs) ? null : closedAtMs;
+}
+
+/**
+ * When the thread's linked issues all closed after the user's last word, the
+ * time the last one closed; otherwise null. Like pull requests, an issue
+ * already closed when linked is a record of the work, not something the thread
+ * waits on.
+ */
+function issuesClosedAtMs(
+  thread: Pick<
+    ProjectionStore.ProjectionSettlementCandidate,
+    "issues" | "createdAt" | "latestUserAuthoredMessageAt"
+  >,
+): number | null {
+  const awaited = (thread.issues ?? []).filter((link) => {
+    const closedAtMs = issueClosedAtMs(link);
+    if (closedAtMs === null) return true;
+    const linkedAtMs = Date.parse(link.linkedAt);
+    return Number.isNaN(linkedAtMs) || closedAtMs >= linkedAtMs;
+  });
+  if (awaited.length === 0) return null;
+  let latest = Number.NEGATIVE_INFINITY;
+  for (const link of awaited) {
+    const closedAtMs = issueClosedAtMs(link);
+    if (closedAtMs === null) return null;
+    latest = Math.max(latest, closedAtMs);
+  }
+  const userAnchorMs = latestMillis([
+    toMillis(thread.createdAt),
+    toMillis(thread.latestUserAuthoredMessageAt),
+  ]);
+  return userAnchorMs !== null && latest >= userAnchorMs ? latest : null;
+}
+
 export function isAutoSettlementCandidate(
   thread: Omit<ProjectionStore.ProjectionSettlementCandidate, "latestUserAuthoredMessageAt">,
   nowMs: number,
@@ -191,6 +234,7 @@ export function resolveAutoSettlementAt(input: {
   readonly nowMs: number;
   readonly autoSettleAfterDays: number | null;
   readonly autoSettleOnMerge: boolean;
+  readonly autoSettleOnIssueClose?: boolean;
   readonly autoSettleKeepPullRequests?: boolean;
 }): DateTime.Utc | null {
   const { thread } = input;
@@ -226,6 +270,9 @@ export function resolveAutoSettlementAt(input: {
   if (pullRequest !== null && pullRequestSettles(thread, pullRequest, input.autoSettleOnMerge)) {
     return DateTime.makeUnsafe(activityAtMs);
   }
+  if (input.autoSettleOnIssueClose === true && issuesClosedAtMs(thread) !== null) {
+    return DateTime.makeUnsafe(activityAtMs);
+  }
   const hasPullRequest =
     hasOpenLink ||
     pullRequest !== null ||
@@ -252,12 +299,17 @@ export class ThreadSettlementServiceV2 extends Context.Service<
 >()("t3/orchestration-v2/ThreadSettlementService/ThreadSettlementServiceV2") {}
 
 function autoSettlementConfigured(settings: import("@t3tools/contracts").ServerSettings): boolean {
-  if (settings.sidebarAutoSettleOnMerge || settings.sidebarAutoSettleAfterDays !== null) {
+  if (
+    settings.sidebarAutoSettleOnMerge ||
+    settings.sidebarAutoSettleOnIssueClose ||
+    settings.sidebarAutoSettleAfterDays !== null
+  ) {
     return true;
   }
   return Object.values(settings.projectSettingsOverrides).some(
     (entry) =>
       entry.sidebarAutoSettleOnMerge === true ||
+      entry.sidebarAutoSettleOnIssueClose === true ||
       (entry.sidebarAutoSettleAfterDays !== undefined && entry.sidebarAutoSettleAfterDays !== null),
   );
 }
@@ -268,12 +320,14 @@ export function autoSettlementSettingsKey(
 ): string {
   return JSON.stringify([
     settings.sidebarAutoSettleOnMerge,
+    settings.sidebarAutoSettleOnIssueClose,
     settings.sidebarAutoSettleAfterDays,
     settings.sidebarAutoSettleKeepPullRequests,
     Object.entries(settings.projectSettingsOverrides)
       .filter(
         ([, entry]) =>
           entry.sidebarAutoSettleOnMerge !== undefined ||
+          entry.sidebarAutoSettleOnIssueClose !== undefined ||
           entry.sidebarAutoSettleAfterDays !== undefined ||
           entry.sidebarAutoSettleKeepPullRequests !== undefined,
       )
@@ -281,6 +335,7 @@ export function autoSettlementSettingsKey(
       .map(([projectId, entry]) => [
         projectId,
         entry.sidebarAutoSettleOnMerge ?? "inherit",
+        entry.sidebarAutoSettleOnIssueClose ?? "inherit",
         entry.sidebarAutoSettleAfterDays === undefined
           ? "inherit"
           : entry.sidebarAutoSettleAfterDays,
@@ -296,6 +351,7 @@ export const make = Effect.gen(function* () {
   const settingsService = yield* ServerSettings.ServerSettingsService;
   const git = yield* GitManager.GitManager;
   const pullRequests = yield* PullRequestService.PullRequestService;
+  const threadIssues = yield* ThreadIssueService.ThreadIssueService;
   const random = yield* SecureRandom.SecureRandom;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -322,6 +378,24 @@ export const make = Effect.gen(function* () {
     const projects = new Map(projectShells.map((project) => [project.id, project]));
     // Merge events resweep all candidates because unlinked threads settle through branch lookup.
     const candidates = threads.filter((thread) => isAutoSettlementCandidate(thread, nowMs));
+    // Issue snapshots are otherwise only refreshed while someone is looking at the thread, so an
+    // idle thread would never see its issue close. The refresh's own sync event re-sweeps it.
+    yield* Effect.forEach(
+      candidates.filter(
+        (thread) =>
+          resolveProjectSettings(settings, thread.projectId).settings
+            .sidebarAutoSettleOnIssueClose &&
+          // Closed snapshots saved before closedAt existed need one read to become settleable.
+          (thread.issues ?? []).some(
+            (link) => link.snapshot?.state.category !== "closed" || link.snapshot.closedAt == null,
+          ),
+      ),
+      (thread) =>
+        threadIssues.refresh(thread.id, {
+          staleAfterMs: ThreadIssueService.BACKGROUND_STALE_AFTER_MS,
+        }),
+      { discard: true },
+    );
 
     // Runs per candidate thread, thousands per sweep on busy servers; the sweep owns the span.
     const settleThread = Effect.fnUntraced(
@@ -338,6 +412,7 @@ export const make = Effect.gen(function* () {
           nowMs: DateTime.toEpochMillis(decisionNow),
           autoSettleAfterDays: currentSettings.sidebarAutoSettleAfterDays,
           autoSettleOnMerge: currentSettings.sidebarAutoSettleOnMerge,
+          autoSettleOnIssueClose: currentSettings.sidebarAutoSettleOnIssueClose,
           autoSettleKeepPullRequests: currentSettings.sidebarAutoSettleKeepPullRequests,
         });
         if (settledAt === null) return thread;
@@ -375,6 +450,7 @@ export const make = Effect.gen(function* () {
           nowMs,
           autoSettleAfterDays: projectSettings.sidebarAutoSettleAfterDays,
           autoSettleOnMerge: projectSettings.sidebarAutoSettleOnMerge,
+          autoSettleOnIssueClose: projectSettings.sidebarAutoSettleOnIssueClose,
           autoSettleKeepPullRequests: projectSettings.sidebarAutoSettleKeepPullRequests,
         });
         return settledAt === null ? Effect.succeed(thread) : settleThread(thread, null);
@@ -454,6 +530,7 @@ export const make = Effect.gen(function* () {
             nowMs: DateTime.toEpochMillis(decisionNow),
             autoSettleAfterDays: settings.sidebarAutoSettleAfterDays,
             autoSettleOnMerge: settings.sidebarAutoSettleOnMerge,
+            autoSettleOnIssueClose: settings.sidebarAutoSettleOnIssueClose,
             autoSettleKeepPullRequests: settings.sidebarAutoSettleKeepPullRequests,
           }) !== null
         );

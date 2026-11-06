@@ -1048,6 +1048,7 @@ export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "branchNameInstructions",
   "pullRequestMergeMethod",
   "sidebarAutoSettleOnMerge",
+  "sidebarAutoSettleOnIssueClose",
   "sidebarAutoSettleAfterDays",
   "sidebarAutoSettleKeepPullRequests",
   "continueThreadsAfterServerUpdate",
@@ -1085,6 +1086,7 @@ export const ProjectSettingsOverrides = Schema.Struct({
   branchNameInstructions: Schema.optionalKey(TrimmedString),
   pullRequestMergeMethod: Schema.optionalKey(Schema.NullOr(PullRequestMergeMethod)),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
+  sidebarAutoSettleOnIssueClose: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
   sidebarAutoSettleKeepPullRequests: Schema.optionalKey(Schema.Boolean),
   continueThreadsAfterServerUpdate: Schema.optionalKey(Schema.Boolean),
@@ -1282,6 +1284,9 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
   sidebarAutoSettleOnMerge: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  sidebarAutoSettleOnIssueClose: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
   backgroundActivity: BackgroundActivitySettings,
 
   automaticGitFetchInterval: Schema.DurationFromMillis.pipe(
@@ -1654,6 +1659,7 @@ export const ServerSettingsPatch = Schema.Struct({
   idleCompaction: Schema.optionalKey(IdleCompactionMode),
   sidebarAutoSettleKeepPullRequests: Schema.optionalKey(Schema.Boolean),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
+  sidebarAutoSettleOnIssueClose: Schema.optionalKey(Schema.Boolean),
   autoResumeLimitedThreads: Schema.optionalKey(Schema.Boolean),
   snoozeLimitedThreads: Schema.optionalKey(Schema.Boolean),
   snoozePresets: Schema.optionalKey(SnoozePresetSettings),

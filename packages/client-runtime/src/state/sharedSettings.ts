@@ -8,6 +8,7 @@ const SHARED_SERVER_SETTING_KEYS = [
   "continueThreadsAfterServerUpdate",
   "sidebarAutoSettleAfterDays",
   "sidebarAutoSettleOnMerge",
+  "sidebarAutoSettleOnIssueClose",
   "autoResumeLimitedThreads",
   "snoozeLimitedThreads",
   "snoozePresets",

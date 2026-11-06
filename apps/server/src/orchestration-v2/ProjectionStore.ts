@@ -199,6 +199,7 @@ export type ProjectionSettlementCandidate = Pick<
   | "branch"
   | "worktreePath"
   | "pullRequests"
+  | "issues"
   | "linkedPullRequest"
   | "branchPullRequest"
   | "createdAt"
